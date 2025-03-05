@@ -15,7 +15,7 @@ class CamelCaseModel(BaseModel):
 class ChatImage(CamelCaseModel):
     """Represents an image in the chat"""
     caption: str
-    base64: Optional[str] = None
+    image_url: Optional[str] = None
     color: str
 
 class ChatbotState(CamelCaseModel):

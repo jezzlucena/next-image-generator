@@ -124,7 +124,8 @@ async def websocket_endpoint(websocket: WebSocket):
                     to all clients.
                     3 - Lock the app.
                     """
-                    chat_images.append({ 'caption': data['content'], 'color': data['color'] })
+                    response = { "caption": data['content'], 'color': data['color'] }
+                    chat_images.append(response)
 
                     await manager.broadcast(json.dumps({
                         'type': "prompt",
@@ -134,21 +135,18 @@ async def websocket_endpoint(websocket: WebSocket):
 
                     is_locked = True
 
-                    """4 - Add interaction to conversation history preemptively"""
-                    response = { "caption": data['content'], 'color': data['color'] }
-                    chat_images.append(response)
-
                     """
-                    5 - Generate image using the Stable Diffuser pipeline
-                    6 - Convert image to base64 string
+                    4 - Generate image using the Stable Diffuser pipeline
+                    5 - Convert image to base64 string
+                    6 - Unlock the app
                     """
                     image: bytes = pipe(prompt=data['content']).images[0]
                     image_io = BytesIO()
                     image.save(image_io, format="PNG")
                     base64_encoded = base64.b64encode(image_io.getvalue())
-                    base64_string = base64_encoded.decode('utf-8')
+                    base64_string = "data:image/png;base64," + base64_encoded.decode('utf-8')
 
-                    response['base64'] = base64_string
+                    response['image_url'] = base64_string
 
                     await manager.broadcast(json.dumps({
                         'type': "image",

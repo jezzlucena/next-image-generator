@@ -3,9 +3,10 @@ import { GeneratedImage } from "@/types/GeneratedImage";
 import { useEffect, useState } from "react";
 import { toast } from "react-toastify";
 import ChatImage from "./ChatImage";
+import axios, { AxiosResponse } from "axios";
 
 export const isBrowser = typeof window !== "undefined";
-export const webSocket = isBrowser ? new WebSocket('ws://localhost:5055/ws') : null;
+export const webSocket = isBrowser ? new WebSocket(process.env.NEXT_PUBLIC_WEBSOCKET_URL || "ws://localhost:8085/ws") : null;
 
 /** String literal representing the types of messages that can be sent */
 type SentDataType = 'reset' | 'prompt' | 'typing'
@@ -17,6 +18,9 @@ export default function ImageGenerator() {
   const [userColor, setUserColor] = useState<string>('');
   const [userInput, setUserInput] = useState('');
   const [chatImages, setChatImages] = useState<GeneratedImage[]>([]);
+  const [userTypingTimeouts, setUserTypingTimeouts] = useState<{
+    [key: string]: NodeJS.Timeout
+  }>({});
 
   const sendData = (type: SentDataType, content?: string) => {
     if (webSocket && webSocket.readyState === WebSocket.OPEN) {
@@ -70,6 +74,25 @@ export default function ImageGenerator() {
     sendData('typing');
   };
 
+  /**
+   * Fetches the current state of the app, this is used to synchronize
+   * the client state with the server state when the app is first opened */
+  const getState = () => {
+    axios.get<{
+      images: GeneratedImage[],
+      isLocked: boolean
+    }>(`${process.env.NEXT_PUBLIC_BACKEND_URL}/state`)
+      .then((res: AxiosResponse) => {
+        console.log(res.data)
+        setChatImages(res.data['images']);
+        setLocked(res.data['isLocked']);
+      })
+      .catch((error: Error) => {
+        toast.error("Error fetching previous images.")
+        console.error(error)
+      })
+  };
+
   useEffect(() => {
     if (!webSocket) return;
     
@@ -99,20 +122,33 @@ export default function ImageGenerator() {
            */
           setChatImages([...chatImages, {
             caption: data.content,
-            color: data.color || '',
+            color: data.color as string,
           }]);
+          delete userTypingTimeouts[data.color as string]
+          setUserTypingTimeouts({ ...userTypingTimeouts });
+          setLocked(true);
           break;
         case 'color':
-          setUserColor(data.content || '');
+          setUserColor(data.content as string);
+          break;
+        case 'typing':
+          /**
+           * Display typing indicator for the respective color,
+           * clear and set timeouts accordingly 
+           */
+          clearTimeout(userTypingTimeouts[data.color as string])
+          userTypingTimeouts[data.color as string] = setTimeout(() => {
+            delete userTypingTimeouts[data.color as string];
+            setUserTypingTimeouts({ ...userTypingTimeouts });
+          }, 5000)
+          setUserTypingTimeouts({ ...userTypingTimeouts });
           break;
         case 'image':
-          console.log(chatImages);
-          console.log(chatImages.length);
-          console.log(chatImages[chatImages.length - 1]);
           const lastImage = chatImages[chatImages.length - 1];
-          lastImage.imageUrl = `data:image/png;base64,${data.content}`;
+          lastImage.imageUrl = data.content;
           chatImages.pop();
           setChatImages([...chatImages, lastImage]);
+          setLocked(false);
       }
     };
   
@@ -123,7 +159,11 @@ export default function ImageGenerator() {
     webSocket.onclose = () => {
       console.log('WebSocket connection closed');
     };
-  }, [chatImages]);
+  }, [chatImages, userTypingTimeouts]);
+
+  useEffect(() => {
+    getState();
+  }, []);
 
   return (
     <div className="absolute flex flex-col top-0 left-[50%] bottom-0 w-[100%] -translate-x-[50%] pb-5 pr-5 pl-5 max-w-lg mx-auto my-0 overflow-hidden">
@@ -141,6 +181,7 @@ export default function ImageGenerator() {
       </div>
       <div className="chatContainer grow overflow-y-scroll pt-[90px]">
         {chatImages.map((image, index) => <ChatImage image={image} key={index} />)}
+        {Object.keys(userTypingTimeouts).map(color => <ChatImage image={{ color }} key={color} />)}
       </div>
       <div>
         <form action={createPrompt}>

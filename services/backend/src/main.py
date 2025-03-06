@@ -7,7 +7,6 @@ from .util import ConnectionManager, random_dark_color
 from diffusers import StableDiffusionPipeline, EulerDiscreteScheduler
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response
 from io import BytesIO
 from pydantic import BaseModel
 from torch import float16
@@ -140,7 +139,7 @@ async def websocket_endpoint(websocket: WebSocket):
                     5 - Convert image to base64 string
                     6 - Unlock the app
                     """
-                    image: bytes = pipe(prompt=data['content']).images[0]
+                    image = pipe(prompt=data['content']).images[0]
                     image_io = BytesIO()
                     image.save(image_io, format="PNG")
                     base64_encoded = base64.b64encode(image_io.getvalue())

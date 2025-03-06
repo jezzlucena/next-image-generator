@@ -1,6 +1,6 @@
 "use client"
 import { GeneratedImage } from "@/types/GeneratedImage";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "react-toastify";
 import ChatImage from "./ChatImage";
 import axios, { AxiosResponse } from "axios";
@@ -14,6 +14,9 @@ type SentDataType = 'reset' | 'prompt' | 'typing'
 type ReceivedDataType = SentDataType | 'image' | 'color'
 
 export default function ImageGenerator() {
+  const chatContainer = useRef<HTMLDivElement>(null);
+  const textArea = useRef<HTMLTextAreaElement>(null);
+
   const [isLocked, setLocked] = useState(true);
   const [userColor, setUserColor] = useState<string>('');
   const [userInput, setUserInput] = useState('');
@@ -21,6 +24,39 @@ export default function ImageGenerator() {
   const [userTypingTimeouts, setUserTypingTimeouts] = useState<{
     [key: string]: NodeJS.Timeout
   }>({});
+  
+  
+  /** Scrolls the {@link chatContainer} to the bottom (e.g. when a new message is submitted by a user) */
+  const scrollToBottom = () => {
+    const elm = chatContainer.current;
+    if (elm) elm.scrollTop = elm.scrollHeight;
+  }
+
+  /**
+   * Returns true if {@link chatContainer} is currently scrolled to the bottom
+   * Used to avoid screen jumps while the AI is streaming.
+   */
+  const isScrolledToBottom = () => {
+    const elm = chatContainer.current;
+    return elm &&
+      Math.abs(elm.scrollHeight - elm.scrollTop - elm.clientHeight) < 1;
+  }
+
+  /**
+   * Resize text area (e.g. when the user types a message that takes
+   * up more than one line.)
+   */
+  const resizeTextArea = () => {
+    const elm = textArea.current;
+    if (elm) {
+      const wasAtBottom = isScrolledToBottom();
+  
+      elm.style.height = 'auto';
+      elm.style.height = `${elm.scrollHeight}px`;
+  
+      if (wasAtBottom) setTimeout(() => scrollToBottom(), 0);
+    }
+  }
 
   const sendData = (type: SentDataType, content?: string) => {
     if (webSocket && webSocket.readyState === WebSocket.OPEN) {
@@ -32,7 +68,10 @@ export default function ImageGenerator() {
           color: ['typing', 'prompt'].includes(type) ? userColor : undefined,
         }),
       );
-      if (type === 'prompt') setUserInput('');
+      if (type === 'prompt') {
+        setUserInput('');
+        setTimeout(() => resizeTextArea(), 0);
+      }
     } else {
       /** Otherwise, handle error recovery (e.g. display a toast, show message with error flag) */
       switch (type) {
@@ -47,16 +86,20 @@ export default function ImageGenerator() {
         case 'reset':
           toast.error("Error resetting images.");
       }
+
+      setTimeout(() => scrollToBottom(), 0);
     }
   };
   
   const clearMessages = (event: React.MouseEvent<HTMLElement>) => {
+    if (chatImages.length === 0 || isLocked) return;
     event.preventDefault();
     sendData('reset');
   };
 
   /** Submit prompt message */
   const createPrompt = () => {
+    if (!userInput || isLocked) return;
     sendData('prompt', userInput);
   }
 
@@ -72,6 +115,7 @@ export default function ImageGenerator() {
     const value = event.target.value;
     setUserInput(value);
     sendData('typing');
+    resizeTextArea();
   };
 
   /**
@@ -83,7 +127,6 @@ export default function ImageGenerator() {
       isLocked: boolean
     }>(`${process.env.NEXT_PUBLIC_BACKEND_URL}/state`)
       .then((res: AxiosResponse) => {
-        console.log(res.data)
         setChatImages(res.data['images']);
         setLocked(res.data['isLocked']);
       })
@@ -95,8 +138,9 @@ export default function ImageGenerator() {
 
   useEffect(() => {
     if (!webSocket) return;
-    
+
     webSocket.onopen = () => {
+      toast.success("Connected to server.")
       console.log('WebSocket connection opened');
       setLocked(false);
     };
@@ -107,6 +151,8 @@ export default function ImageGenerator() {
         content?: string,
         color?: string
       } = JSON.parse(event.data)
+
+      const wasAtBottom = isScrolledToBottom();
 
       switch (data.type) {
         case 'reset':
@@ -150,6 +196,8 @@ export default function ImageGenerator() {
           setChatImages([...chatImages, lastImage]);
           setLocked(false);
       }
+
+      if (wasAtBottom) setTimeout(() => scrollToBottom(), 100);
     };
   
     webSocket.onerror = (error) => {
@@ -159,6 +207,8 @@ export default function ImageGenerator() {
     webSocket.onclose = () => {
       console.log('WebSocket connection closed');
     };
+
+    setTimeout(() => scrollToBottom(), 0);
   }, [chatImages, userTypingTimeouts]);
 
   useEffect(() => {
@@ -166,7 +216,7 @@ export default function ImageGenerator() {
   }, []);
 
   return (
-    <div className="absolute flex flex-col top-0 left-[50%] bottom-0 w-[100%] -translate-x-[50%] pb-5 pr-5 pl-5 max-w-lg mx-auto my-0 overflow-hidden">
+    <div className="absolute flex flex-col top-0 left-[50%] bottom-0 w-[100%] -translate-x-[50%] pb-5 pr-5 pl-5 max-w-[768px] mx-auto my-0 overflow-hidden">
       <div
         className="absolute left-0 top-0 w-[100%] py-5 text-center backdrop-blur-sm bg-white bg-opacity-70 pointer-events-none whitespace-nowrap border-b border-gray-200 border-solid"
         style={{ zIndex: 1 }}
@@ -179,7 +229,7 @@ export default function ImageGenerator() {
           by Jezz Lucena
         </span>
       </div>
-      <div className="chatContainer grow overflow-y-scroll pt-[90px]">
+      <div ref={chatContainer} className="chatContainer grow overflow-y-scroll pt-[90px]">
         {chatImages.map((image, index) => <ChatImage image={image} key={index} />)}
         {Object.keys(userTypingTimeouts).map(color => <ChatImage image={{ color }} key={color} />)}
       </div>
@@ -187,6 +237,7 @@ export default function ImageGenerator() {
         <form action={createPrompt}>
           <textarea
             className="p-[10px] w-[100%] h-auto overflow-y-hidden text-sm text-gray-900 bg-gray-50 rounded-lg border border-gray-300 focus:ring-blue-500 focus:border-blue-500"
+            ref={textArea}
             rows={1}
             value={userInput}
             onChange={handleChange}
@@ -206,7 +257,7 @@ export default function ImageGenerator() {
             <button
               className="ml-2 bg-gray-100 hover:bg-gray-200 text-black py-1 px-2 rounded"
             >
-              en_US
+              en_US 🇺🇸
             </button>
             <button
               className={"ml-2 bg-gray-100 hover:bg-gray-200 text-black py-1 px-2 rounded " + (isLocked ? ' opacity-50 cursor-not-allowed ' : '' )}

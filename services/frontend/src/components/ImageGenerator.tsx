@@ -4,6 +4,12 @@ import { useEffect, useRef, useState } from "react";
 import { toast } from "react-toastify";
 import ChatImage from "./ChatImage";
 import axios, { AxiosResponse } from "axios";
+import styles from "./ImageGenerator.module.scss"
+import {useTranslations} from 'next-intl';
+import { redirect, useParams } from "next/navigation";
+import { LANGUAGES } from "@/util/constants";
+import { Locale } from "@/i18n/routing";
+import LanguageModal from "./LanguageModal";
 
 export const isBrowser = typeof window !== "undefined";
 export const webSocket = isBrowser ? new WebSocket(process.env.NEXT_PUBLIC_WEBSOCKET_URL || "ws://localhost:8085/ws") : null;
@@ -18,13 +24,16 @@ export default function ImageGenerator() {
   const textArea = useRef<HTMLTextAreaElement>(null);
 
   const [isLocked, setLocked] = useState(true);
+  const [isLanguageSelected, setLanguageSelected] = useState(true);
   const [userColor, setUserColor] = useState<string>('');
   const [userInput, setUserInput] = useState('');
   const [chatImages, setChatImages] = useState<GeneratedImage[]>([]);
   const [userTypingTimeouts, setUserTypingTimeouts] = useState<{
     [key: string]: NodeJS.Timeout
   }>({});
-  
+
+  const params = useParams<{ locale: string }>()
+  const t = useTranslations('ImageGenerator');
   
   /** Scrolls the {@link chatContainer} to the bottom (e.g. when a new message is submitted by a user) */
   const scrollToBottom = () => {
@@ -70,7 +79,7 @@ export default function ImageGenerator() {
       );
       if (type === 'prompt') {
         setUserInput('');
-        setTimeout(() => resizeTextArea(), 0);
+        setTimeout(() => resizeTextArea(), 100);
       }
     } else {
       /** Otherwise, handle error recovery (e.g. display a toast, show message with error flag) */
@@ -81,10 +90,10 @@ export default function ImageGenerator() {
             color: userColor,
             error: true,
           });
-          toast.error("Error sending image request.");
+          toast.error(t("error.imageRequest"));
           break;
         case 'reset':
-          toast.error("Error resetting images.");
+          toast.error("error.resetting");
       }
 
       setTimeout(() => scrollToBottom(), 0);
@@ -127,11 +136,11 @@ export default function ImageGenerator() {
       isLocked: boolean
     }>(`${process.env.NEXT_PUBLIC_BACKEND_URL}/state`)
       .then((res: AxiosResponse) => {
-        setChatImages(res.data['images']);
-        setLocked(res.data['isLocked']);
+        setChatImages(res.data['images'])
+        setLocked(res.data['isLocked'])
       })
       .catch((error: Error) => {
-        toast.error("Error fetching previous images.")
+        toast.error(t('error.fetching'))
         console.error(error)
       })
   };
@@ -140,8 +149,8 @@ export default function ImageGenerator() {
     if (!webSocket) return;
 
     webSocket.onopen = () => {
-      toast.success("Connected to server.")
-      console.log('WebSocket connection opened');
+      toast.success(t("connected"))
+      console.log('WebSocket connection opened')
       setLocked(false);
     };
   
@@ -209,31 +218,31 @@ export default function ImageGenerator() {
     };
 
     setTimeout(() => scrollToBottom(), 0);
-  }, [chatImages, userTypingTimeouts]);
+  }, [chatImages, t, userTypingTimeouts]);
 
   useEffect(() => {
     getState();
   }, []);
 
   return (
-    <div className="absolute flex flex-col top-0 left-[50%] bottom-0 w-[100%] -translate-x-[50%] pb-5 pr-5 pl-5 max-w-[768px] mx-auto my-0 overflow-hidden">
+    <div className="absolute flex flex-col top-0 left-[50%] bottom-0 w-[100%] -translate-x-[50%] pb-5 pr-5 pl-5  overflow-hidden">
       <div
-        className="absolute left-0 top-0 w-[100%] py-5 text-center backdrop-blur-sm bg-white bg-opacity-70 pointer-events-none whitespace-nowrap border-b border-gray-200 border-solid"
+        className="absolute left-0 top-0 w-[100%] py-5 text-center backdrop-blur-sm bg-background/70 bg-opacity-70 pointer-events-none whitespace-nowrap border-b border-gray-200 border-solid"
         style={{ zIndex: 1 }}
       >
         <span className="text-3xl">
-          AI Image Generator
+          { t('title') }
         </span>
         {" "}
         <span className="text-sm">
-          by Jezz Lucena
+          { t('byJezzLucena') }
         </span>
       </div>
-      <div ref={chatContainer} className="chatContainer grow overflow-y-scroll pt-[90px]">
+      <div ref={chatContainer} className={styles.chatContainer + " grow overflow-y-scroll pt-[90px] max-w-[768px] mx-auto my-0"}>
         {chatImages.map((image, index) => <ChatImage image={image} key={index} />)}
         {Object.keys(userTypingTimeouts).map(color => <ChatImage image={{ color }} key={color} />)}
       </div>
-      <div>
+      <div className="w-[100%] max-w-[768px] mx-auto my-0">
         <form action={createPrompt}>
           <textarea
             className="p-[10px] w-[100%] h-auto overflow-y-hidden text-sm text-gray-900 bg-gray-50 rounded-lg border border-gray-300 focus:ring-blue-500 focus:border-blue-500"
@@ -245,36 +254,44 @@ export default function ImageGenerator() {
           ></textarea>
           <div className="flex font-bold text-xs">
             <div className="grow">
-              Powered by
+              { t('poweredBy') }
               {" "}
               <a
                 className="underline p-0"
                 href="https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct"
                 target="_blank"
-                >Stable Diffusion v2
+                >Stable Diffusion
               </a>
             </div>
             <button
               className="ml-2 bg-gray-100 hover:bg-gray-200 text-black py-1 px-2 rounded"
+              onClick={() => setLanguageSelected(false)}
             >
-              en_US 🇺🇸
+              { LANGUAGES[params.locale as Locale].short }
             </button>
             <button
               className={"ml-2 bg-gray-100 hover:bg-gray-200 text-black py-1 px-2 rounded " + (isLocked ? ' opacity-50 cursor-not-allowed ' : '' )}
               onClick={clearMessages}
             >
-              Reset
+              { t('reset') }
             </button>
             <button
               className={"ml-2 bg-blue-500 hover:opacity-70 text-white py-1 px-2 rounded " + (isLocked ? ' opacity-50 cursor-not-allowed ' : '' )}
               type="submit"
               style={{ backgroundColor: userColor }}
             >
-              Send
+              { t('send') }
             </button>
           </div>
         </form>
       </div>
+
+      {!isLanguageSelected && 
+        <LanguageModal
+          onChoose={language => redirect(`/${language}`)}
+          onClose={() => setLanguageSelected(true)}
+        />
+      }
     </div>
   );
 }

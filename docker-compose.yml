@@ -1,0 +1,26 @@
+name: next-image-generator
+
+services:
+  backend:
+    build:
+      context: ./services/backend
+      dockerfile: Dockerfile
+    ports:
+      - 5055:5055
+    volumes:
+      - ./services/backend:/app
+      - huggingface_hub_cache:/root/.cache/huggingface/hub
+    restart: always
+
+  frontend:
+    build: ./services/frontend
+    volumes:
+      - ./services/frontend:/app
+      - node_modules:/app/node_modules
+    ports:
+      - 8085:8085
+    restart: always
+
+volumes:
+  huggingface_hub_cache:
+  node_modules:

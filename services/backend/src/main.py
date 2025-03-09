@@ -1,3 +1,4 @@
+import asyncio
 import base64
 import json
 from typing import List
@@ -98,12 +99,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
             text = await websocket.receive_text()
             """Wait for the user to send a chat message or a command"""
-            
-            if (is_locked):
-                """If the app is locked (e.g. because the assistant is
-                currently broadcasting a message to the clients), ignore
-                any other messages to avoid inconsistencies."""
-                continue
+
             data = json.loads(text)
             """Parse the text received from the client into a dict"""
 
@@ -139,11 +135,13 @@ async def websocket_endpoint(websocket: WebSocket):
                     5 - Convert image to base64 string
                     6 - Unlock the app
                     """
-                    image = pipe(prompt=data['content']).images[0]
+                    loop = asyncio.get_running_loop()
+                    image = await loop.run_in_executor(None, lambda: pipe(data['content']).images[0])
+                    # image = pipe(prompt=data['content']).images[0]
                     image_io = BytesIO()
-                    image.save(image_io, format="PNG")
+                    image.save(image_io, format="jpeg", quality=75)
                     base64_encoded = base64.b64encode(image_io.getvalue())
-                    base64_string = "data:image/png;base64," + base64_encoded.decode('utf-8')
+                    base64_string = "data:image/jpeg;base64," + base64_encoded.decode('utf-8')
 
                     response['image_url'] = base64_string
 

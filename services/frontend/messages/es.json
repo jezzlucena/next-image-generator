@@ -1,0 +1,18 @@
+{
+  "ImageGenerator": {
+    "title": "Generador de Imágenes AI",
+    "byJezzLucena": "por Jezz Lucena",
+    "poweredBy": "powered by",
+    "reset": "Limpiar",
+    "send": "Enviar",
+    "connected": "Conectado al servidor.",
+    "error": {
+      "imageRequest": "Error enviando solicitud de imagen.",
+      "resetting": "Error limpiando imágenes.",
+      "fetching": "Error recuperando imágenes."
+    } 
+  },
+  "LanguageModal": {
+    "choose": "Eligir"
+  }
+}

@@ -1,0 +1,25 @@
+name: next-image-generator-cuda
+
+services:
+  backend:
+    extends:
+      file: docker-compose.yml
+      service: backend
+    build:
+      dockerfile: Dockerfile.cuda
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  frontend:
+    extends:
+      file: docker-compose.yml
+      service: frontend
+
+volumes:
+  huggingface_hub_cache:
+  node_modules:

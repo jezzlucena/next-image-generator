@@ -56,7 +56,7 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:8085", "https://image-generator.jezzlucena.com"],
+    allow_origins=["http://localhost:8085", "https://image-generator.jezzlucena.xyz"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
